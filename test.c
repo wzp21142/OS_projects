@@ -1,64 +1,59 @@
 #include <stdio.h>
 #include <stdlib.h>
+#include <string.h>
+#include <sys/types.h>
 #include <unistd.h>
-#include <pthread.h>
+#include <sys/wait.h>
 
-int com_data[5];
-int num = 0;
-pthread_mutex_t mutex;
-
-void *reader(void *mode){
-    int buffer[2];
-    int *mod = (int *)mode;
-    for(int i=0; i<10;){
-        pthread_mutex_lock(&mutex);
-        if (num > 0) {
-            buffer[i%2] = com_data[--num];
+int main() {
+    int i=0, result;
+    pid_t pid;
+    char* split = " ";
+    char *temp[256];
+    char str[256];
+    while(1){
+        printf("please input a instruction:");
+        fgets(str,256,stdin);
+        printf("str=%s",str);
+        str[strlen(str)-1] = '\0';
+        if(strcmp(str, "quit\n") == 0)
+            break;
+        temp[0]= strtok(str, split);
+        while (temp[i]!= NULL) {
+            printf("%s\n", temp[i]);
             i++;
-            if (!(i%2)){
-                if (*mod)
-                    printf("%d + %d = %d\n", buffer[0], buffer[1], buffer[0] + buffer[1]);
-                else
-                    printf("%d * %d = %d\n", buffer[0], buffer[1], buffer[0] * buffer[1]);
+            temp[i] = strtok(NULL, split);
+        }
+        printf("1");
+        /*if (argc <= 1) {
+            printf("Input error\n");
+            exit(1);
+        }
+        for (i = 1; i < argc; i++) {
+            temp[i - 1] = argv[i];
+        }
+        temp[argc - 1] = NULL;*/
+        pid = fork();
+        if (pid < 0) {
+            perror("Failed to create child");
+            exit(1);
+        }
+        else if (pid == 0) {
+            // Child
+            printf("succcess to create child");
+            result = execvp(temp[0], temp);
+            printf("result=%d",result);
+            if (result == -1) {
+                perror("In child process, failed to exec a program");
             }
+            exit(1);
         }
-        pthread_mutex_unlock(&mutex);
-    }
-    pthread_exit(NULL);
-}
-
-void *producer(void *file_path){
-    char *f  = (char *)file_path;
-    FILE *fp = fopen(f, "r");
-    for(int i=0; i<10;){
-        pthread_mutex_lock(&mutex);
-        if(num < 5) {
-            fscanf(fp, "%d", &com_data[num++]);
-            printf("put %d into pool[%d]\n",com_data[num-1],num-1);
-            i++;
+        else {
+            // Parent
+            wait(&result);
+            printf("\n\033[1;32m Value returned from child process, result = %d\033[0m\n", result);
+            printf("\033[1;32m WEXITSTATUS(result) = %d\033[0m\n", WEXITSTATUS(result));
         }
-        pthread_mutex_unlock(&mutex);
     }
-    fclose(fp);
-    pthread_exit(NULL);
-}
-
-int main(void){
-    pthread_t r1,r2,p1,p2;
-    char *file_path1 = "data1.txt";
-    char *file_path2 = "data2.txt";
-    int mode0 = 0, *mod0, mode1 = 1, *mod1;
-    mod0 = &mode0;
-    mod1 = &mode1;
-    pthread_mutex_init(&mutex, NULL);
-    pthread_create(&p1, NULL, producer, (void *)file_path1);
-    pthread_create(&p2, NULL, producer, (void *)file_path2);
-    pthread_create(&r1, NULL, reader, (void *)mod0);
-    pthread_create(&r2, NULL, reader, (void *)mod1);
-    pthread_join(p1, NULL);
-    pthread_join(p2, NULL);
-    pthread_join(r1, NULL);
-    pthread_join(r2, NULL);
-
-    return EXIT_SUCCESS;
+    return 0;
 }
